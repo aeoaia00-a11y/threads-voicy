@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Sparkles,
@@ -31,7 +31,7 @@ import {
 } from "@/components/ui";
 import { useUserProfile, useResearch, usePosts } from "@/hooks";
 import { DEFAULT_TEMPLATES, getTemplateById } from "@/lib/templates";
-import { ToneSettings } from "@/types";
+import { ToneSettings, AIProvider, AI_PROVIDER_INFO } from "@/types";
 
 type GenerationMode = "template" | "ai";
 
@@ -59,6 +59,32 @@ export default function GeneratePage() {
   // 参考投稿選択
   const [selectedRefPosts, setSelectedRefPosts] = useState<string[]>([]);
   const [showRefPosts, setShowRefPosts] = useState(false);
+
+  // AIプロバイダー設定
+  const [aiProvider, setAiProvider] = useState<AIProvider>("openai");
+  const [aiApiKey, setAiApiKey] = useState("");
+
+  // ローカルストレージからAI設定を読み込む
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedProvider = localStorage.getItem("threads_voicy_ai_provider") as AIProvider || "openai";
+      setAiProvider(savedProvider);
+
+      let key = "";
+      switch (savedProvider) {
+        case "openai":
+          key = localStorage.getItem("threads_voicy_openai_key") || "";
+          break;
+        case "anthropic":
+          key = localStorage.getItem("threads_voicy_anthropic_key") || "";
+          break;
+        case "google":
+          key = localStorage.getItem("threads_voicy_google_key") || "";
+          break;
+      }
+      setAiApiKey(key);
+    }
+  }, []);
 
   const selectedTemplate = getTemplateById(selectedTemplateId);
 
@@ -99,6 +125,8 @@ export default function GeneratePage() {
                 profile: adjustedProfile,
                 templateContent: selectedTemplate.structure,
                 referenceTexts,
+                provider: aiProvider,
+                apiKey: aiApiKey,
               }),
             });
 
@@ -180,11 +208,16 @@ export default function GeneratePage() {
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       {/* ヘッダー */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">投稿を生成</h1>
-        <p className="mt-1 text-gray-500">
-          テンプレートまたはAIを使って投稿を作成
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">投稿を生成</h1>
+          <p className="mt-1 text-gray-500">
+            テンプレートまたはAIを使って投稿を作成
+          </p>
+        </div>
+        <Badge variant="default" className="text-sm">
+          {AI_PROVIDER_INFO[aiProvider]?.name || aiProvider}
+        </Badge>
       </div>
 
       {/* プロフィール未設定の警告 */}
