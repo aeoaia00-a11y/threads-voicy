@@ -150,7 +150,10 @@ export default function SettingsPage() {
 
   const handleSaveApiSettings = () => {
     if (typeof window !== "undefined") {
+      localStorage.setItem("threads_voicy_ai_provider", selectedProvider);
       localStorage.setItem("threads_voicy_openai_key", openaiKey);
+      localStorage.setItem("threads_voicy_anthropic_key", anthropicKey);
+      localStorage.setItem("threads_voicy_google_key", googleKey);
       localStorage.setItem("threads_voicy_threads_app_id", threadsAppId);
       localStorage.setItem("threads_voicy_threads_app_secret", threadsAppSecret);
       setSaveMessage("API設定を保存しました");
@@ -158,20 +161,34 @@ export default function SettingsPage() {
     }
   };
 
+  const getCurrentApiKey = (): string => {
+    switch (selectedProvider) {
+      case "openai":
+        return openaiKey;
+      case "anthropic":
+        return anthropicKey;
+      case "google":
+        return googleKey;
+      default:
+        return "";
+    }
+  };
+
   const handleConnectThreads = () => {
-    // Threads OAuth認証フローを開始
-    // 実際の実装では、Meta Developer ConsoleでアプリをセットアップしてOAuth URLにリダイレクト
-    const clientId = threadsAppId;
-    const redirectUri = encodeURIComponent(window.location.origin + "/api/threads/callback");
-    const scope = encodeURIComponent("threads_basic,threads_content_publish");
+    // 環境変数またはローカル設定からApp IDを取得
+    const clientId = process.env.NEXT_PUBLIC_THREADS_APP_ID || threadsAppId;
+    const redirectUri = process.env.NEXT_PUBLIC_THREADS_REDIRECT_URI ||
+      (window.location.origin + "/api/threads/callback");
+    const scope = "threads_basic,threads_content_publish";
 
     if (!clientId) {
-      alert("Threads App IDを先に設定してください");
+      alert("Threads App IDが設定されていません。設定ページでApp IDを入力するか、環境変数を設定してください。");
       return;
     }
 
-    const authUrl = `https://threads.net/oauth/authorize?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}&response_type=code`;
-    window.open(authUrl, "_blank");
+    // 正しいThreads OAuth URL
+    const authUrl = `https://www.threads.net/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}&response_type=code`;
+    window.location.href = authUrl;
   };
 
   const handleSaveProfile = async () => {
@@ -230,9 +247,28 @@ export default function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* OpenAI API */}
+          {/* AIプロバイダー選択 */}
           <div className="space-y-4">
-            <h4 className="font-medium text-gray-900">OpenAI API</h4>
+            <h4 className="font-medium text-gray-900">生成AI設定</h4>
+            <Select
+              label="使用するAIプロバイダー"
+              options={providerOptions}
+              value={selectedProvider}
+              onChange={(e) => setSelectedProvider(e.target.value as AIProvider)}
+            />
+            <p className="text-sm text-gray-500">
+              選択したプロバイダーのAPIキーを設定してください
+            </p>
+          </div>
+
+          {/* OpenAI API */}
+          <div className={`space-y-4 p-4 rounded-lg border ${selectedProvider === "openai" ? "border-blue-500 bg-blue-50" : "border-gray-200"}`}>
+            <div className="flex items-center justify-between">
+              <h4 className="font-medium text-gray-900">OpenAI (ChatGPT)</h4>
+              {selectedProvider === "openai" && (
+                <Badge variant="success">選択中</Badge>
+              )}
+            </div>
             <div className="relative">
               <Input
                 label="OpenAI APIキー"
@@ -257,6 +293,78 @@ export default function SettingsPage() {
                 className="text-blue-600 hover:underline inline-flex items-center gap-1"
               >
                 OpenAI APIキーを取得 <ExternalLink className="w-3 h-3" />
+              </a>
+            </p>
+          </div>
+
+          {/* Anthropic API */}
+          <div className={`space-y-4 p-4 rounded-lg border ${selectedProvider === "anthropic" ? "border-blue-500 bg-blue-50" : "border-gray-200"}`}>
+            <div className="flex items-center justify-between">
+              <h4 className="font-medium text-gray-900">Anthropic (Claude)</h4>
+              {selectedProvider === "anthropic" && (
+                <Badge variant="success">選択中</Badge>
+              )}
+            </div>
+            <div className="relative">
+              <Input
+                label="Anthropic APIキー"
+                type={showAnthropicKey ? "text" : "password"}
+                placeholder="sk-ant-..."
+                value={anthropicKey}
+                onChange={(e) => setAnthropicKey(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowAnthropicKey(!showAnthropicKey)}
+                className="absolute right-3 top-8 text-gray-400 hover:text-gray-600"
+              >
+                {showAnthropicKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="text-xs text-gray-500">
+              <a
+                href="https://console.anthropic.com/settings/keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline inline-flex items-center gap-1"
+              >
+                Anthropic APIキーを取得 <ExternalLink className="w-3 h-3" />
+              </a>
+            </p>
+          </div>
+
+          {/* Google AI API */}
+          <div className={`space-y-4 p-4 rounded-lg border ${selectedProvider === "google" ? "border-blue-500 bg-blue-50" : "border-gray-200"}`}>
+            <div className="flex items-center justify-between">
+              <h4 className="font-medium text-gray-900">Google (Gemini)</h4>
+              {selectedProvider === "google" && (
+                <Badge variant="success">選択中</Badge>
+              )}
+            </div>
+            <div className="relative">
+              <Input
+                label="Google AI APIキー"
+                type={showGoogleKey ? "text" : "password"}
+                placeholder="AI..."
+                value={googleKey}
+                onChange={(e) => setGoogleKey(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowGoogleKey(!showGoogleKey)}
+                className="absolute right-3 top-8 text-gray-400 hover:text-gray-600"
+              >
+                {showGoogleKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="text-xs text-gray-500">
+              <a
+                href="https://aistudio.google.com/app/apikey"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline inline-flex items-center gap-1"
+              >
+                Google AI APIキーを取得 <ExternalLink className="w-3 h-3" />
               </a>
             </p>
           </div>
