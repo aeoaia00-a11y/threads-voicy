@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
-import { UserProfile, ResearchPost } from "@/types";
+import { UserProfile } from "@/types";
 import { buildGenerationPrompt } from "@/lib/prompts";
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
 
 interface GenerateRequest {
   profile: UserProfile;
@@ -18,10 +14,15 @@ export async function POST(request: NextRequest) {
     // APIキーの確認
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json(
-        { error: "OpenAI APIキーが設定されていません" },
+        { error: "OpenAI APIキーが設定されていません。設定ページでAPIキーを設定してください。" },
         { status: 500 }
       );
     }
+
+    // OpenAIクライアントをリクエスト時に初期化
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
 
     const { profile, templateContent, referenceTexts = [] }: GenerateRequest =
       await request.json();
