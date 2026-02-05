@@ -1,31 +1,98 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
-import { UserProfile } from "@/types";
+import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import { UserProfile, AIProvider, AI_PROVIDER_INFO } from "@/types";
 import { buildGenerationPrompt } from "@/lib/prompts";
 
 interface GenerateRequest {
   profile: UserProfile;
   templateContent: string;
   referenceTexts?: string[];
+  provider?: AIProvider;
+  apiKey?: string;
+  model?: string;
+}
+
+async function generateWithOpenAI(
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  userPrompt: string
+): Promise<string> {
+  const openai = new OpenAI({ apiKey });
+
+  const completion = await openai.chat.completions.create({
+    model,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    temperature: 0.8,
+    max_tokens: 1000,
+  });
+
+  return completion.choices[0]?.message?.content?.trim() || "";
+}
+
+async function generateWithAnthropic(
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  userPrompt: string
+): Promise<string> {
+  const anthropic = new Anthropic({ apiKey });
+
+  const message = await anthropic.messages.create({
+    model,
+    max_tokens: 1000,
+    system: systemPrompt,
+    messages: [
+      { role: "user", content: userPrompt },
+    ],
+  });
+
+  const textBlock = message.content.find((block) => block.type === "text");
+  return textBlock?.type === "text" ? textBlock.text.trim() : "";
+}
+
+async function generateWithGoogle(
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  userPrompt: string
+): Promise<string> {
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const generativeModel = genAI.getGenerativeModel({
+    model,
+    systemInstruction: systemPrompt,
+  });
+
+  const result = await generativeModel.generateContent(userPrompt);
+  return result.response.text().trim();
 }
 
 export async function POST(request: NextRequest) {
   try {
-    // APIキーの確認
-    if (!process.env.OPENAI_API_KEY) {
+    const {
+      profile,
+      templateContent,
+      referenceTexts = [],
+      provider = "openai",
+      apiKey,
+      model,
+    }: GenerateRequest = await request.json();
+
+    // APIキーの確認（リクエストから、または環境変数から）
+    const effectiveApiKey = apiKey || getEnvApiKey(provider);
+
+    if (!effectiveApiKey) {
+      const providerName = AI_PROVIDER_INFO[provider]?.name || provider;
       return NextResponse.json(
-        { error: "OpenAI APIキーが設定されていません。設定ページでAPIキーを設定してください。" },
+        { error: `${providerName}のAPIキーが設定されていません。設定ページでAPIキーを設定してください。` },
         { status: 500 }
       );
     }
-
-    // OpenAIクライアントをリクエスト時に初期化
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
-
-    const { profile, templateContent, referenceTexts = [] }: GenerateRequest =
-      await request.json();
 
     if (!profile) {
       return NextResponse.json(
@@ -41,26 +108,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const prompt = buildGenerationPrompt(profile, templateContent, referenceTexts);
+    const effectiveModel = model || AI_PROVIDER_INFO[provider]?.defaultModel;
+    const systemPrompt = "あなたはSNSマーケティングの専門家です。バズるThreads投稿を作成してください。";
+    const userPrompt = buildGenerationPrompt(profile, templateContent, referenceTexts);
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "あなたはSNSマーケティングの専門家です。バズるThreads投稿を作成してください。",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      temperature: 0.8,
-      max_tokens: 1000,
-    });
+    let generatedContent: string;
 
-    const generatedContent = completion.choices[0]?.message?.content?.trim();
+    switch (provider) {
+      case "openai":
+        generatedContent = await generateWithOpenAI(effectiveApiKey, effectiveModel, systemPrompt, userPrompt);
+        break;
+      case "anthropic":
+        generatedContent = await generateWithAnthropic(effectiveApiKey, effectiveModel, systemPrompt, userPrompt);
+        break;
+      case "google":
+        generatedContent = await generateWithGoogle(effectiveApiKey, effectiveModel, systemPrompt, userPrompt);
+        break;
+      default:
+        return NextResponse.json(
+          { error: `未対応のプロバイダー: ${provider}` },
+          { status: 400 }
+        );
+    }
 
     if (!generatedContent) {
       return NextResponse.json(
@@ -71,11 +140,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       content: generatedContent,
-      usage: completion.usage,
+      provider,
+      model: effectiveModel,
     });
   } catch (error) {
     console.error("Generate error:", error);
 
+    // プロバイダー固有のエラーハンドリング
     if (error instanceof OpenAI.APIError) {
       return NextResponse.json(
         { error: `OpenAI API エラー: ${error.message}` },
@@ -83,9 +154,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (error instanceof Anthropic.APIError) {
+      return NextResponse.json(
+        { error: `Anthropic API エラー: ${error.message}` },
+        { status: error.status || 500 }
+      );
+    }
+
+    // Google AI エラー
+    if (error instanceof Error && error.message.includes("GoogleGenerativeAI")) {
+      return NextResponse.json(
+        { error: `Google AI エラー: ${error.message}` },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(
       { error: "投稿の生成中にエラーが発生しました" },
       { status: 500 }
     );
+  }
+}
+
+function getEnvApiKey(provider: AIProvider): string | undefined {
+  switch (provider) {
+    case "openai":
+      return process.env.OPENAI_API_KEY;
+    case "anthropic":
+      return process.env.ANTHROPIC_API_KEY;
+    case "google":
+      return process.env.GOOGLE_AI_API_KEY;
+    default:
+      return undefined;
   }
 }

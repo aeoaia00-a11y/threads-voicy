@@ -186,6 +186,36 @@ export interface LearningData {
   learnedAt: string;
 }
 
+// AIプロバイダー
+export type AIProvider = "openai" | "anthropic" | "google";
+
+export interface AIProviderConfig {
+  provider: AIProvider;
+  apiKey: string;
+  model?: string;
+}
+
+export const AI_PROVIDER_INFO: Record<AIProvider, { name: string; defaultModel: string; keyPrefix: string; keyUrl: string }> = {
+  openai: {
+    name: "OpenAI (ChatGPT)",
+    defaultModel: "gpt-4o-mini",
+    keyPrefix: "sk-",
+    keyUrl: "https://platform.openai.com/api-keys",
+  },
+  anthropic: {
+    name: "Anthropic (Claude)",
+    defaultModel: "claude-3-5-sonnet-20241022",
+    keyPrefix: "sk-ant-",
+    keyUrl: "https://console.anthropic.com/settings/keys",
+  },
+  google: {
+    name: "Google (Gemini)",
+    defaultModel: "gemini-1.5-flash",
+    keyPrefix: "AI",
+    keyUrl: "https://aistudio.google.com/app/apikey",
+  },
+};
+
 // ストレージキー
 export type StorageKey =
   | "userProfile"
@@ -197,7 +227,8 @@ export type StorageKey =
   | "abTests"
   | "trends"
   | "learningData"
-  | "tonePresets";
+  | "tonePresets"
+  | "aiProvider";
 
 // デフォルト口調設定
 export const DEFAULT_TONE_SETTINGS: ToneSettings = {

@@ -16,7 +16,7 @@ import {
   Badge,
 } from "@/components/ui";
 import { useUserProfile, useLocalStorage } from "@/hooks";
-import { ToneSettings, DEFAULT_TONE_SETTINGS } from "@/types";
+import { ToneSettings, DEFAULT_TONE_SETTINGS, AIProvider, AI_PROVIDER_INFO } from "@/types";
 
 const baseStyleOptions = [
   { value: "casual", label: "カジュアル" },
@@ -52,6 +52,9 @@ const audienceAddressOptions = [
 
 interface ApiSettings {
   openaiApiKey: string;
+  anthropicApiKey: string;
+  googleApiKey: string;
+  selectedProvider: AIProvider;
   threadsAppId: string;
   threadsAppSecret: string;
   threadsAccessToken: string;
@@ -60,11 +63,20 @@ interface ApiSettings {
 
 const DEFAULT_API_SETTINGS: ApiSettings = {
   openaiApiKey: "",
+  anthropicApiKey: "",
+  googleApiKey: "",
+  selectedProvider: "openai",
   threadsAppId: "",
   threadsAppSecret: "",
   threadsAccessToken: "",
   threadsUserId: "",
 };
+
+const providerOptions = [
+  { value: "openai", label: "OpenAI (ChatGPT)" },
+  { value: "anthropic", label: "Anthropic (Claude)" },
+  { value: "google", label: "Google (Gemini)" },
+];
 
 export default function SettingsPage() {
   const {
@@ -92,10 +104,15 @@ export default function SettingsPage() {
   const [saveMessage, setSaveMessage] = useState("");
 
   // API設定
+  const [selectedProvider, setSelectedProvider] = useState<AIProvider>("openai");
   const [openaiKey, setOpenaiKey] = useState("");
+  const [anthropicKey, setAnthropicKey] = useState("");
+  const [googleKey, setGoogleKey] = useState("");
   const [threadsAppId, setThreadsAppId] = useState("");
   const [threadsAppSecret, setThreadsAppSecret] = useState("");
   const [showOpenaiKey, setShowOpenaiKey] = useState(false);
+  const [showAnthropicKey, setShowAnthropicKey] = useState(false);
+  const [showGoogleKey, setShowGoogleKey] = useState(false);
   const [showThreadsSecret, setShowThreadsSecret] = useState(false);
   const [threadsConnected, setThreadsConnected] = useState(false);
 
@@ -113,12 +130,18 @@ export default function SettingsPage() {
   // ローカルストレージからAPI設定を読み込む
   useEffect(() => {
     if (typeof window !== "undefined") {
+      const savedProvider = localStorage.getItem("threads_voicy_ai_provider") as AIProvider || "openai";
       const savedOpenaiKey = localStorage.getItem("threads_voicy_openai_key") || "";
+      const savedAnthropicKey = localStorage.getItem("threads_voicy_anthropic_key") || "";
+      const savedGoogleKey = localStorage.getItem("threads_voicy_google_key") || "";
       const savedThreadsAppId = localStorage.getItem("threads_voicy_threads_app_id") || "";
       const savedThreadsAppSecret = localStorage.getItem("threads_voicy_threads_app_secret") || "";
       const savedThreadsToken = localStorage.getItem("threads_voicy_threads_token") || "";
 
+      setSelectedProvider(savedProvider);
       setOpenaiKey(savedOpenaiKey);
+      setAnthropicKey(savedAnthropicKey);
+      setGoogleKey(savedGoogleKey);
       setThreadsAppId(savedThreadsAppId);
       setThreadsAppSecret(savedThreadsAppSecret);
       setThreadsConnected(!!savedThreadsToken);
